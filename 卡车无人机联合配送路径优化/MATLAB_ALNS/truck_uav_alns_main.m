@@ -36,6 +36,8 @@ params.improvementWeightFactor = cfg.alns.improvementWeightFactor;
 params.nonImprovementWeightFactor = cfg.alns.nonImprovementWeightFactor;
 params.wDestroy = ones(1, 3);
 params.wRepair = ones(1, 3);
+params.destroyUseTimes = zeros(1, 3);
+params.repairUseTimes = zeros(1, 3);
 params.destroyScore = ones(1, 3);
 params.repairScore = ones(1, 3);
 params.w1 = 1.5;
@@ -158,6 +160,8 @@ T = find_starting_temperature(params.tau, best.distance);
 for i = 1:params.nIterations
     destroyOpNr = roulette_select(params.wDestroy);
     repairOpNr = roulette_select(params.wRepair);
+    params.destroyUseTimes(destroyOpNr) = params.destroyUseTimes(destroyOpNr) + 1;
+    params.repairUseTimes(repairOpNr) = params.repairUseTimes(repairOpNr) + 1;
     sizeNBH = randi([params.minSizeNBH, maxSizeNBH]);
 
     candidate = current;
@@ -175,7 +179,7 @@ for i = 1:params.nIterations
         params.repairScore(repairOpNr) = params.repairScore(repairOpNr) + params.w1;
     else
         if T > 0
-            acceptance_prob = exp(-(repaired_cost - best.total_cost) / T);
+            acceptance_prob = exp(-(repaired_cost - current.total_cost) / T);
         else
             acceptance_prob = 0;
         end
@@ -195,8 +199,10 @@ for i = 1:params.nIterations
     else
         weightFactor = params.nonImprovementWeightFactor;
     end
-    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * params.destroyScore(destroyOpNr) * weightFactor;
-    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * params.repairScore(repairOpNr) * weightFactor;
+    destroyPerformance = params.destroyScore(destroyOpNr) / max(1, params.destroyUseTimes(destroyOpNr));
+    repairPerformance = params.repairScore(repairOpNr) / max(1, params.repairUseTimes(repairOpNr));
+    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * destroyPerformance * weightFactor;
+    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * repairPerformance * weightFactor;
     T = T * params.coolingRate;
 end
 
@@ -294,9 +300,6 @@ bestRoute = [];
 route = solution.truckRoute.locations;
 for i = 2:numel(route)
     candidate = [route(1:i-1), reqID, route(i:end)];
-    if reqID == candidate(i - 1)
-        continue;
-    end
     addCost = route_distance(problem, candidate) - route_distance(problem, route);
     if addCost < bestCost
         bestCost = addCost;
@@ -398,8 +401,9 @@ if ismember(reqID, solution.servedByDrone)
     current_truck_nodes = solution.truckRoute.locations;
     for i = 1:numel(solution.droneTasks)
         pickup_match = solution.droneTasks(i).pickup_node == reqID;
+        launch_invalid = removed_from_truck && ~ismember(solution.droneTasks(i).launch_node, current_truck_nodes);
         recovery_invalid = removed_from_truck && ~ismember(solution.droneTasks(i).recovery_node, current_truck_nodes);
-        if pickup_match || recovery_invalid
+        if pickup_match || launch_invalid || recovery_invalid
             keep(i) = false;
         end
     end
@@ -426,7 +430,8 @@ for i = 1:numel(solution.droneTasks)
     task = solution.droneTasks(i);
     d = node_distance(problem, task.launch_node, task.pickup_node) + node_distance(problem, task.pickup_node, task.recovery_node);
     total_distance = total_distance + d;
-    total_time = task.launch_time + d / problem.drones(1).speed + problem.drone_launch_recovery_time;
+    task_drone = get_drone(problem, task.drone_id);
+    total_time = task.launch_time + d / task_drone.speed + problem.drone_launch_recovery_time;
     truck_time = max(truck_time, total_time);
 end
 
@@ -522,6 +527,14 @@ end
 function loc = get_location(problem, nodeID)
 idx = find(problem.nodeIDs == nodeID, 1, 'first');
 loc = problem.locations(idx);
+end
+
+function drone = get_drone(problem, drone_id)
+idx = find([problem.drones.drone_id] == drone_id, 1, 'first');
+if isempty(idx)
+    idx = 1;
+end
+drone = problem.drones(idx);
 end
 
 function print_result(solution, problem)
