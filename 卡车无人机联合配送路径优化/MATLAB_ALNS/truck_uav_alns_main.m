@@ -1,10 +1,11 @@
 function result = truck_uav_alns_main(dataFile)
+cfg = default_config();
 if nargin < 1
     dataFile = fullfile(fileparts(mfilename('fullpath')), '..', 'ALNS', 'data.csv');
 end
 
-rng(42);
-problem = load_problem(dataFile);
+rng(cfg.randomSeed);
+problem = load_problem(dataFile, cfg);
 solution = init_solution(problem);
 
 while ~isempty(solution.notServed)
@@ -25,12 +26,12 @@ while ~isempty(solution.notServed)
     end
 end
 
-params.nIterations = 500;
-params.minSizeNBH = 1;
-params.maxPercentageNBH = 5;
-params.tau = 0.03;
-params.coolingRate = 0.999;
-params.decayParameter = 0.15;
+params.nIterations = cfg.alns.nIterations;
+params.minSizeNBH = cfg.alns.minSizeNBH;
+params.maxPercentageNBH = cfg.alns.maxPercentageNBH;
+params.tau = cfg.alns.tau;
+params.coolingRate = cfg.alns.coolingRate;
+params.decayParameter = cfg.alns.decayParameter;
 params.wDestroy = ones(1, 3);
 params.wRepair = ones(1, 3);
 params.destroyScore = ones(1, 3);
@@ -43,7 +44,30 @@ result = alns_optimize(solution, problem, params);
 print_result(result.bestSolution, problem);
 end
 
-function problem = load_problem(dataFile)
+function cfg = default_config()
+cfg.randomSeed = 42;
+cfg.alns.nIterations = 500;
+cfg.alns.minSizeNBH = 1;
+cfg.alns.maxPercentageNBH = 5;
+cfg.alns.tau = 0.03;
+cfg.alns.coolingRate = 0.999;
+cfg.alns.decayParameter = 0.15;
+cfg.drone.drone_id = 1;
+cfg.drone.max_range = 10000;
+cfg.drone.speed = 80;
+cfg.drone.capacity = 1;
+cfg.cost.drone_launch_recovery_time = 0.5;
+cfg.cost.truck_transport_cost = 5;
+cfg.cost.drone_transport_cost = 1;
+cfg.cost.truck_waiting_cost = 1;
+cfg.cost.drone_waiting_cost = 1;
+cfg.cost.drone_reward_per_task = 30;
+cfg.constraint.max_drone_launch_pickup_distance = 15;
+cfg.destroy.random_removal_fraction = 0.8;
+cfg.truck_speed = 60;
+end
+
+function problem = load_problem(dataFile, cfg)
 t = readtable(dataFile);
 
 depot = make_location(t(1, :), 0);
@@ -80,16 +104,16 @@ problem.requests = requests;
 problem.nodeIDs = nodeIDs;
 problem.distMatrix = distMatrix;
 problem.depotID = depot.nodeID;
-problem.drone_launch_recovery_time = 0.5;
-problem.truck_transport_cost = 5;
-problem.drone_transport_cost = 1;
-problem.truck_waiting_cost = 1;
-problem.drone_waiting_cost = 1;
-problem.drone_reward_per_task = 30;
-problem.max_drone_launch_pickup_distance = 15;
-problem.random_removal_fraction = 0.8;
-problem.truck_speed = 60;
-problem.drones = struct('drone_id', 1, 'max_range', 10000, 'speed', 80, 'capacity', 1);
+problem.drone_launch_recovery_time = cfg.cost.drone_launch_recovery_time;
+problem.truck_transport_cost = cfg.cost.truck_transport_cost;
+problem.drone_transport_cost = cfg.cost.drone_transport_cost;
+problem.truck_waiting_cost = cfg.cost.truck_waiting_cost;
+problem.drone_waiting_cost = cfg.cost.drone_waiting_cost;
+problem.drone_reward_per_task = cfg.cost.drone_reward_per_task;
+problem.max_drone_launch_pickup_distance = cfg.constraint.max_drone_launch_pickup_distance;
+problem.random_removal_fraction = cfg.destroy.random_removal_fraction;
+problem.truck_speed = cfg.truck_speed;
+problem.drones = cfg.drone;
 end
 
 function loc = make_location(row, typeLoc)
@@ -344,7 +368,8 @@ end
 end
 
 function solution = remove_request(solution, problem, reqID)
-if ismember(reqID, solution.servedByTruck)
+removed_from_truck = ismember(reqID, solution.servedByTruck);
+if removed_from_truck
     solution.servedByTruck(solution.servedByTruck == reqID) = [];
     solution.truckRoute.requestIDs(solution.truckRoute.requestIDs == reqID) = [];
     locs = solution.truckRoute.locations;
@@ -362,7 +387,9 @@ if ismember(reqID, solution.servedByDrone)
     solution.servedByDrone(solution.servedByDrone == reqID) = [];
     keep = true(1, numel(solution.droneTasks));
     for i = 1:numel(solution.droneTasks)
-        if solution.droneTasks(i).pickup_node == reqID || solution.droneTasks(i).recovery_node == reqID
+        pickup_match = solution.droneTasks(i).pickup_node == reqID;
+        recovery_invalid = removed_from_truck && solution.droneTasks(i).recovery_node == reqID;
+        if pickup_match || recovery_invalid
             keep(i) = false;
         end
     end
