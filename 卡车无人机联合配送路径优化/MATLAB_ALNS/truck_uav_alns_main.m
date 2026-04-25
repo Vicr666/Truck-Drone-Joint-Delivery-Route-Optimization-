@@ -176,8 +176,8 @@ for i = 1:params.nIterations
     else
         if T > 0
             delta_cost = repaired_cost - current.total_cost;
-            if delta_cost <= 0
-                acceptance_prob = 0;
+            if delta_cost < 0
+                acceptance_prob = 1;
             else
                 acceptance_prob = exp(-delta_cost / T);
             end
