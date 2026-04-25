@@ -84,6 +84,23 @@ python main.py
 python generate_data.py
 ```
 
+### MATLAB 运行方式
+
+在 MATLAB/Octave 中：
+
+```matlab
+cd('卡车无人机联合配送路径优化/MATLAB_ALNS')
+truck_uav_alns_main
+```
+
+Python 文件对应的 MATLAB 版本已补充为同目录同名 `.m` 文件，例如：
+
+- `ALNS/main.py -> ALNS/main.m`
+- `ALNS/alns.py -> ALNS/alns.m`
+- `PDPTW-main/PDPTW/main.py -> PDPTW-main/PDPTW/main.m`
+- `generate_data.py -> generate_data.m`
+- `local_search.py -> local_search.m`
+
 ## 算法说明
 
 ### ALNS (Adaptive Large Neighborhood Search)
