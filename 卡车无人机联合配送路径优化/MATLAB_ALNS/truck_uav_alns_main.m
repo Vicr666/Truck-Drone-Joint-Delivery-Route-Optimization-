@@ -32,8 +32,6 @@ params.maxPercentageNBH = cfg.alns.maxPercentageNBH;
 params.tau = cfg.alns.tau;
 params.coolingRate = cfg.alns.coolingRate;
 params.decayParameter = cfg.alns.decayParameter;
-params.improvementWeightFactor = cfg.alns.improvementWeightFactor;
-params.nonImprovementWeightFactor = cfg.alns.nonImprovementWeightFactor;
 params.wDestroy = ones(1, 3);
 params.wRepair = ones(1, 3);
 params.destroyUseTimes = zeros(1, 3);
@@ -56,8 +54,6 @@ cfg.alns.maxPercentageNBH = 5;
 cfg.alns.tau = 0.03;
 cfg.alns.coolingRate = 0.999;
 cfg.alns.decayParameter = 0.15;
-cfg.alns.improvementWeightFactor = 1.0;
-cfg.alns.nonImprovementWeightFactor = 0.5;
 cfg.drone.drone_id = 1;
 cfg.drone.max_range = 10000;
 cfg.drone.speed = 80;
@@ -179,7 +175,12 @@ for i = 1:params.nIterations
         params.repairScore(repairOpNr) = params.repairScore(repairOpNr) + params.w1;
     else
         if T > 0
-            acceptance_prob = exp(-(repaired_cost - current.total_cost) / T);
+            delta_cost = repaired_cost - current.total_cost;
+            if delta_cost <= 0
+                acceptance_prob = 0;
+            else
+                acceptance_prob = exp(-delta_cost / T);
+            end
         else
             acceptance_prob = 0;
         end
@@ -194,15 +195,10 @@ for i = 1:params.nIterations
         end
     end
 
-    if improvement
-        weightFactor = params.improvementWeightFactor;
-    else
-        weightFactor = params.nonImprovementWeightFactor;
-    end
     destroyPerformance = params.destroyScore(destroyOpNr) / max(1, params.destroyUseTimes(destroyOpNr));
     repairPerformance = params.repairScore(repairOpNr) / max(1, params.repairUseTimes(repairOpNr));
-    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * destroyPerformance * weightFactor;
-    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * repairPerformance * weightFactor;
+    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * destroyPerformance;
+    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * repairPerformance;
     T = T * params.coolingRate;
 end
 
@@ -386,10 +382,15 @@ if removed_from_truck
     solution.truckRoute.requestIDs(solution.truckRoute.requestIDs == reqID) = [];
     locs = solution.truckRoute.locations;
     locs(locs == reqID) = [];
-    if isempty(locs)
+    if numel(locs) < 2
         locs = [problem.depotID, problem.depotID];
-    elseif locs(end) ~= problem.depotID
-        locs(end + 1) = problem.depotID;
+    else
+        if locs(1) ~= problem.depotID
+            locs = [problem.depotID, locs];
+        end
+        if locs(end) ~= problem.depotID
+            locs(end + 1) = problem.depotID;
+        end
     end
     solution.truckRoute.locations = locs;
 end
@@ -400,8 +401,8 @@ if ismember(reqID, solution.servedByDrone)
     current_truck_nodes = solution.truckRoute.locations;
     for i = 1:numel(solution.droneTasks)
         pickup_match = solution.droneTasks(i).pickup_node == reqID;
-        launch_invalid = removed_from_truck && ~ismember(solution.droneTasks(i).launch_node, current_truck_nodes);
-        recovery_invalid = removed_from_truck && ~ismember(solution.droneTasks(i).recovery_node, current_truck_nodes);
+        launch_invalid = ~ismember(solution.droneTasks(i).launch_node, current_truck_nodes);
+        recovery_invalid = ~ismember(solution.droneTasks(i).recovery_node, current_truck_nodes);
         if pickup_match || launch_invalid || recovery_invalid
             keep(i) = false;
         end
