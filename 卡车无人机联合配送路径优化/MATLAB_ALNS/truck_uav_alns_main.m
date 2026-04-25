@@ -32,6 +32,8 @@ params.maxPercentageNBH = cfg.alns.maxPercentageNBH;
 params.tau = cfg.alns.tau;
 params.coolingRate = cfg.alns.coolingRate;
 params.decayParameter = cfg.alns.decayParameter;
+params.improvementWeightFactor = cfg.alns.improvementWeightFactor;
+params.nonImprovementWeightFactor = cfg.alns.nonImprovementWeightFactor;
 params.wDestroy = ones(1, 3);
 params.wRepair = ones(1, 3);
 params.destroyScore = ones(1, 3);
@@ -52,6 +54,8 @@ cfg.alns.maxPercentageNBH = 5;
 cfg.alns.tau = 0.03;
 cfg.alns.coolingRate = 0.999;
 cfg.alns.decayParameter = 0.15;
+cfg.alns.improvementWeightFactor = 1.0;
+cfg.alns.nonImprovementWeightFactor = 0.5;
 cfg.drone.drone_id = 1;
 cfg.drone.max_range = 10000;
 cfg.drone.speed = 80;
@@ -186,8 +190,13 @@ for i = 1:params.nIterations
         end
     end
 
-    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * params.destroyScore(destroyOpNr) * (0.5 + 0.5 * improvement);
-    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * params.repairScore(repairOpNr) * (0.5 + 0.5 * improvement);
+    if improvement
+        weightFactor = params.improvementWeightFactor;
+    else
+        weightFactor = params.nonImprovementWeightFactor;
+    end
+    params.wDestroy(destroyOpNr) = (1 - params.decayParameter) * params.wDestroy(destroyOpNr) + params.decayParameter * params.destroyScore(destroyOpNr) * weightFactor;
+    params.wRepair(repairOpNr) = (1 - params.decayParameter) * params.wRepair(repairOpNr) + params.decayParameter * params.repairScore(repairOpNr) * weightFactor;
     T = T * params.coolingRate;
 end
 
@@ -386,9 +395,10 @@ end
 if ismember(reqID, solution.servedByDrone)
     solution.servedByDrone(solution.servedByDrone == reqID) = [];
     keep = true(1, numel(solution.droneTasks));
+    current_truck_nodes = solution.truckRoute.locations;
     for i = 1:numel(solution.droneTasks)
         pickup_match = solution.droneTasks(i).pickup_node == reqID;
-        recovery_invalid = removed_from_truck && solution.droneTasks(i).recovery_node == reqID;
+        recovery_invalid = removed_from_truck && ~ismember(solution.droneTasks(i).recovery_node, current_truck_nodes);
         if pickup_match || recovery_invalid
             keep(i) = false;
         end
