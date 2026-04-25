@@ -85,6 +85,9 @@ problem.truck_transport_cost = 5;
 problem.drone_transport_cost = 1;
 problem.truck_waiting_cost = 1;
 problem.drone_waiting_cost = 1;
+problem.drone_reward_per_task = 30;
+problem.max_drone_launch_pickup_distance = 15;
+problem.random_removal_fraction = 0.8;
 problem.truck_speed = 60;
 problem.drones = struct('drone_id', 1, 'max_range', 10000, 'speed', 80, 'capacity', 1);
 end
@@ -187,7 +190,7 @@ end
 
 switch destroyOpNr
     case 1
-        remove_size = min(sizeNBH, max(1, floor(0.8 * numel(served))));
+        remove_size = min(sizeNBH, max(1, floor(problem.random_removal_fraction * numel(served))));
         removed = served(randperm(numel(served), remove_size));
     case 2
         [~, idx] = sort(arrayfun(@(id) depot_distance(problem, id), served), 'descend');
@@ -293,7 +296,7 @@ for i = 1:(numel(route) - 1)
     end
 
     distance_launch_to_pickup = node_distance(problem, launch_node, reqID);
-    if distance_launch_to_pickup > 15
+    if distance_launch_to_pickup > problem.max_drone_launch_pickup_distance
         continue;
     end
 
@@ -404,7 +407,7 @@ for i = 1:numel(solution.droneTasks)
     drone_transport_cost = drone_transport_cost + d * problem.drone_transport_cost;
 end
 
-drone_reward = 30 * numel(solution.droneTasks);
+drone_reward = problem.drone_reward_per_task * numel(solution.droneTasks);
 
 truck_waiting_cost = 0;
 drone_waiting_cost = 0;
