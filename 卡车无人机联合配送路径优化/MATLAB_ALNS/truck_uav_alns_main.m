@@ -27,7 +27,7 @@ end
 
 params.nIterations = 500;
 params.minSizeNBH = 1;
-params.maxPercentageNHB = 5;
+params.maxPercentageNBH = 5;
 params.tau = 0.03;
 params.coolingRate = 0.999;
 params.decayParameter = 0.15;
@@ -124,7 +124,7 @@ current = initialSolution;
 best = initialSolution;
 
 number_of_request = numel(problem.requests);
-maxSizeNBH = max(1, floor(params.maxPercentageNHB / 100 * number_of_request));
+maxSizeNBH = max(1, floor(params.maxPercentageNBH / 100 * number_of_request));
 T = find_starting_temperature(params.tau, best.distance);
 
 for i = 1:params.nIterations
@@ -261,7 +261,7 @@ bestRoute = [];
 route = solution.truckRoute.locations;
 for i = 2:numel(route)
     candidate = [route(1:i-1), reqID, route(i:end)];
-    if candidate(i - 1) == candidate(i)
+    if reqID == candidate(i - 1)
         continue;
     end
     addCost = route_distance(problem, candidate) - route_distance(problem, route);
