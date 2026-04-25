@@ -386,11 +386,10 @@ if removed_from_truck
     solution.truckRoute.requestIDs(solution.truckRoute.requestIDs == reqID) = [];
     locs = solution.truckRoute.locations;
     locs(locs == reqID) = [];
-    if locs(end) ~= problem.depotID
-        locs(end + 1) = problem.depotID;
-    end
     if isempty(locs)
         locs = [problem.depotID, problem.depotID];
+    elseif locs(end) ~= problem.depotID
+        locs(end + 1) = problem.depotID;
     end
     solution.truckRoute.locations = locs;
 end
@@ -463,7 +462,7 @@ for i = 1:numel(solution.droneTasks)
     end
     waiting_time = arrivals(idx) - task.recovery_time;
     if waiting_time > 0
-        drone_waiting_cost = drone_waiting_cost + abs(waiting_time) * problem.drone_waiting_cost;
+        drone_waiting_cost = drone_waiting_cost + waiting_time * problem.drone_waiting_cost;
     else
         truck_waiting_cost = truck_waiting_cost + abs(waiting_time) * problem.truck_waiting_cost;
     end
